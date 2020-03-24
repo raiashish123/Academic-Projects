@@ -1,0 +1,280 @@
+---
+title: "Time Series Assignment"
+author: "Group 8"
+date: "March 4, 2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Problem Statement:
+Sales of souvenir data have been provided in the fancy.txt file.
+
+```{r}
+#Install and use library
+#install.packages("tseries")
+library(tseries)
+#install.packages("forecast")
+library(forecast)
+```
+1.a) Visualizing the whole data,dividing the time series data into different components and plotting the different components individually
+
+```{r}
+# Convert to CSV & Read Data
+setwd("D:/PGPBABI/Time Series")
+
+tab <- read.table("fancy.dat.txt", comment="", header=FALSE)
+write.csv(tab, "souvenir.csv", row.names=FALSE, quote=FALSE)
+souvenir = read.csv(file = "souvenir.csv" )
+str(souvenir)
+summary(souvenir)
+nrow(souvenir)
+
+```
+```{r}
+# Convert dataframe in to Timeseries dataset
+souvenirTS = ts(souvenir,start=c(1987,1),end=c(1993,12),frequency = 12)
+souvenirTS
+```
+
+```{r}
+# Plot the time series
+plot.ts(souvenirTS)
+```
+Observation : Upward sales trend over time,year end/Christmas impact during december every year.
+
+
+```{r}
+# Transform the series
+logsouvenirTS =  log(souvenirTS)
+plot.ts(logsouvenirTS)
+```
+Addtictive model is not the best represtation to describe the timeseries as seasonal & random sales impact seemed to be increasing with time hence transforming the Time series to log data of original series.
+
+Observation: With the log transformed data, seasonal sales impact seems to be slightly more constant over time.
+
+
+```{r}
+# Seasonal Plot
+seasonplot(logsouvenirTS, col = rainbow(13))
+```
+
+Observation: Spliting the plot to Month, clearly shows that March & December shows upward sales trend every year.
+
+
+```{r}
+decomposedRes <- decompose(logsouvenirTS, type="mult") 
+plot (decomposedRes) # see plot below
+```
+1.b)Time series stationarity check
+
+```{r}
+#Stationary Tests
+adf.test(logsouvenirTS) # p-value < 0.05 indicates the TS is stationary
+kpss.test(logsouvenirTS)
+```
+Observation: p-value = 0.01 proves tha time series is non-stationary.
+
+2.Splitting data into Test/Train or Dev/holdout
+
+```{r}
+# Split the data in to test and train
+validLength = 12
+trainLength = length(logsouvenirTS) - (2*(validLength))
+trainLength
+logsouvenirTSTrain = window(logsouvenirTS, start= c(1987,1), end = c(1987, trainLength))
+logsouvenirTSTest = window(logsouvenirTS, start = c(1987,trainLength+1),end = c(1987,trainLength+(2*(validLength))))
+logsouvenirTSTest
+logsouvenirTSTrain
+```
+
+3.a)Holt Winter Model creation
+
+```{r}
+# Holt_winter's Model
+logsouvenirTS_winter = HoltWinters(logsouvenirTSTrain) # Training data
+logsouvenirTS_winter
+plot(logsouvenirTS_winter)
+```
+Observation: 
+Smoothing parameters:
+ alpha: 0.3629272 - Low 
+ beta : 0 - Low
+ gamma: 0.8610514 - High
+ 
+ Plots shows that HW model is successfully predicting Sales Peak.
+ 
+ 3.b)Predicting the values for test dataset using HW model
+ 
+```{r}
+# Forecast for next 60 months
+logsouvenirTS_winterfive = forecast(logsouvenirTS_winter,60)
+plot(logsouvenirTS_winterfive, shadecols = rainbow(13))
+```
+
+Observation: Blue line is the forecasted values and burning area shows 80% and 95% prediction intervals.
+
+3.c) validation against actual values using MAPE
+
+```{r}
+# Mean and accuracy
+mean(logsouvenirTS_winterfive$residuals, na.rm=T)
+
+accuracy(logsouvenirTS_winterfive, logsouvenirTSTest)
+```
+
+Observation: MAPE is 1.46 and 1.60 for training and test data set respectively, which is extremely good.  This means the model is stable with an accuracy of 1.46% and 1.60% for training and test data set respectively
+
+```{r}
+# shapiro test
+shapiro.test(logsouvenirTS_winterfive$residuals)
+
+```
+
+p-value = 0.8831 means that residuals are normal.
+
+```{r}
+# Testing model on complete data set
+souvenirTS_winterCS = HoltWinters(logsouvenirTS)
+souvenirTS_winterCS
+plot(souvenirTS_winterCS)
+```
+
+Observation: 
+
+Smoothing parameters:
+ alpha: 0.413418 - Low
+ beta : 0 
+ gamma: 0.9561275 - High
+ 
+ Smoothing parameters are similar as train data.
+ 
+ Plot is able to predict seasonal impact successfuly similar to train data.
+
+
+```{r}
+# Forecast for next 5years
+souvenirTS_winterCf = forecast(souvenirTS_winterCS,60)
+
+plot(souvenirTS_winterCf, shadecols = rainbow(13))
+```
+
+```{r}
+# Shapiro.test
+shapiro.test(souvenirTS_winterCf$residuals)
+```
+
+
+```{r}
+# Mean
+mean(souvenirTS_winterCf$residuals, na.rm=T)
+```
+```{r}
+#Accuracy
+accuracy(souvenirTS_winterCf)
+
+```
+MAPE is very good at 1.38.
+
+```{r}
+# Test the model on ACF plot
+acf(souvenirTS_winterCf$residuals, na.action= na.pass, lag.max = 20)
+```
+
+Observation: The Correlogram shows autocorrelation shows that in-sample forecast errors doesn't cross significance level.
+
+```{r}
+plot(souvenirTS_winterCf$residuals)
+checkresiduals(souvenirTS_winterCf)
+```
+
+Observations : The time plot shows that forecast errors are constant over time with very minor eveidence of autocorrealtion
+
+4.a)ARIMA Model creation
+
+```{r}
+
+ ####### ARIMA Model#########
+
+souvenirTS = ts(souvenir,start=c(1987,1),end=c(1993,12),frequency = 12)
+plot(souvenirTS)
+abline(reg=lm(souvenirTS~time(souvenirTS)))
+
+```
+
+Observation: Plot shows that data is not stationary.
+
+```{r}
+# Kpss. test
+kpss.test(souvenirTS)
+```
+
+```{r}
+# Transform the series
+plot(log(souvenirTS))
+abline(reg=lm(log(souvenirTS)~time(souvenirTS)))
+```
+
+```{r}
+#Use Diff trasformation
+
+plot(diff(log(souvenirTS)))
+```
+
+```{r}
+# Kpss.test for stationary data
+
+kpss.test(diff(log(souvenirTS)))
+```
+
+```{r}
+# ACF plot for "q" value 
+
+acf(diff(log(souvenirTS)))  
+```
+```{r}
+# Pacf plot for "p" value
+
+pacf(diff(log(souvenirTS))) 
+
+```
+
+4.b)Predicting the values for test dataset using ARIMA model	
+
+```{r}
+# Final coordinates for ARIMA model will be (2,1,2)
+arimamodel = arima(log(souvenirTS),c(2,1,2),seasonal = list(order=c(2,1,2),period = 12))
+arimamodel
+```
+
+5.b) Use both the models to predict the values for next 5 years using ARIMA model
+```{r}
+# Prediction for next 5 Years
+arimapred = predict(arimamodel, n.ahead =60)
+arimapredf = 2.718 ^arimapred$pred
+arimapredf
+plot(arimapredf)
+
+```
+```{r}
+# Sahpiro.test for train model
+shapiro.test(arimamodel$residuals)
+```
+
+```{r}
+# mean 
+mean(arimamodel$residuals, na.rm=T)
+```
+
+4.c)Validation against actual values using MAPE
+
+```{r}
+#accuracy
+accuracy(arimamodel)
+```
+Observation : MAPE 1.25 is extremely good.
+
+
+Conclusion : ARIMA model has better forecasted values at MAPE 1.25 comapared to 1.38 for HW model
